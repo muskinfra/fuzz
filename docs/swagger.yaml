@@ -1,0 +1,121 @@
+basePath: /api/v1
+definitions:
+  main.User:
+    properties:
+      id:
+        type: string
+      username:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: This is a simple API for managing users
+  title: User Management API
+paths:
+  /user:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user
+      parameters:
+      - description: User details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/main.User'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.User'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+      summary: Create one user
+  /user/{id}:
+    delete:
+      description: Delete an existing user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+      summary: Delete one user
+    get:
+      description: Get details of a single user by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.User'
+        "404":
+          description: Not Found
+          schema:
+            type: string
+      summary: Get one user
+    put:
+      consumes:
+      - application/json
+      description: Update details of an existing user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated user details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/main.User'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.User'
+        "404":
+          description: Not Found
+          schema:
+            type: string
+      summary: Update one user
+  /users:
+    get:
+      description: Get a list of all users
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/main.User'
+            type: array
+      summary: Get all users
+swagger: "2.0"

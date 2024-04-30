@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -19,9 +20,38 @@ type User struct {
 }
 
 var users []User
-
 func (u *User) IsEmpty() bool {
 	return u.Username == ""
+}
+
+func SetupSwagger(router *mux.Router, swaggerEndPoint string) (*mux.Router, error) {
+	// Ensure swaggerEndPoint is not empty
+	if swaggerEndPoint == "" {
+		
+		return nil, errors.New("swaggerEndPoint cannot be empty")
+	}
+	// Ensure router is not nil
+	if router == nil {
+		
+		return nil, errors.New("router cannot be empty")
+	}
+
+	// Serve Swagger UI
+	router.PathPrefix("/swagger/").Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+
+		// Serve Swagger UI using http.StripPrefix to handle the prefix
+		httpSwagger.Handler(
+			httpSwagger.URL(swaggerEndPoint), // URL pointing to API definition
+		).ServeHTTP(w, r)
+	}))
+
+	// Serve Swagger JSON file
+	router.Handle("/docs/swagger.json", http.FileServer(http.Dir("./")))
+
+	return router, nil
 }
 // @title User Management API
 // @description This is a simple API for managing users
@@ -41,10 +71,15 @@ func main() {
 	r.HandleFunc("/user", createUser).Methods("POST")
 	r.HandleFunc("/user/{id}", updateUser).Methods("PUT")
 	r.HandleFunc("/user/{id}", deleteUser).Methods("DELETE")
-	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
-
+   
+	// Setup Swagger
+	swaggerEndPoint := "/docs/swagger.json"
+	router, err := SetupSwagger(r, swaggerEndPoint)
+	if err != nil {
+		log.Fatalf("Error setting up Swagger: %v", err)
+	}
 	// listen on port
-	log.Fatal(http.ListenAndServe(":4000", r))
+	log.Fatal(http.ListenAndServe(":4000", router))
 }
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
