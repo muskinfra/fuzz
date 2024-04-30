@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 type User struct {
@@ -22,7 +23,9 @@ var users []User
 func (u *User) IsEmpty() bool {
 	return u.Username == ""
 }
-
+// @title User Management API
+// @description This is a simple API for managing users
+// @basePath /api/v1
 func main() {
 	fmt.Println("User Management API")
 	r := mux.NewRouter()
@@ -38,6 +41,7 @@ func main() {
 	r.HandleFunc("/user", createUser).Methods("POST")
 	r.HandleFunc("/user/{id}", updateUser).Methods("PUT")
 	r.HandleFunc("/user/{id}", deleteUser).Methods("DELETE")
+	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
 	// listen on port
 	log.Fatal(http.ListenAndServe(":4000", r))
@@ -46,13 +50,23 @@ func main() {
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("<h1>Welcome to User Management API</h1>"))
 }
-
+// @summary Get all users
+// @description Get a list of all users
+// @produce json
+// @success 200 {array} User
+// @router /users [get]
 func getAllUsers(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Get all users")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
 }
-
+// @summary Get one user
+// @description Get details of a single user by ID
+// @produce json
+// @param id path string true "User ID"
+// @success 200 {object} User
+// @failure 404 {string} string
+// @router /user/{id} [get]
 func getUser(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Get one user")
 	w.Header().Set("Content-Type", "application/json")
@@ -65,7 +79,14 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode("No user found with given id")
 }
-
+// @summary Create one user
+// @description Create a new user
+// @accept json
+// @produce json
+// @param body body User true "User details"
+// @success 200 {object} User
+// @failure 400 {string} string
+// @router /user [post]
 func createUser(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Create one user")
 	w.Header().Set("Content-Type", "application/json")
@@ -83,7 +104,15 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	users = append(users, user)
 	json.NewEncoder(w).Encode(user)
 }
-
+// @summary Update one user
+// @description Update details of an existing user
+// @accept json
+// @produce json
+// @param id path string true "User ID"
+// @param body body User true "Updated user details"
+// @success 200 {object} User
+// @failure 404 {string} string
+// @router /user/{id} [put]
 func updateUser(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Update one user")
 	w.Header().Set("Content-Type", "application/json")
@@ -100,7 +129,13 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
-
+// @summary Delete one user
+// @description Delete an existing user
+// @produce json
+// @param id path string true "User ID"
+// @success 200 {string} string
+// @failure 404 {string} string
+// @router /user/{id} [delete]
 func deleteUser(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Delete one user")
 	w.Header().Set("Content-Type", "application/json")
