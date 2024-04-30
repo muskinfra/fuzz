@@ -79,24 +79,23 @@ func TestCreateUser(t *testing.T) {
 			status, http.StatusOK)
 	}
 
-	// Check if the response body contains the created user data
+	
 	var createdUser User
 	err = json.Unmarshal(rr.Body.Bytes(), &createdUser)
 	if err != nil {
 		t.Errorf("error decoding response body: %v", err)
 	}
 
-	// Check if the user ID is generated
+	
 	if createdUser.ID == "" {
 		t.Error("user ID is empty")
 	}
 
-	// Check if the username matches
+	
 	if createdUser.Username != userData["username"] {
 		t.Errorf("username mismatch: got %s want %s", createdUser.Username, userData["username"])
 	}
 
-	// Optionally, you can also check if the created user is added to the users slice
-	// and perform other assertions based on your application logic
+	
 }
 
