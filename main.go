@@ -7,11 +7,16 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
+	"os/exec"
+	"runtime/coverage"
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	httpSwagger "github.com/swaggo/http-swagger"
+	"golang.org/x/tools/cover"
 )
 
 type User struct {
@@ -20,6 +25,7 @@ type User struct {
 }
 
 var users []User
+
 func (u *User) IsEmpty() bool {
 	return u.Username == ""
 }
@@ -27,12 +33,12 @@ func (u *User) IsEmpty() bool {
 func SetupSwagger(router *mux.Router, swaggerEndPoint string) (*mux.Router, error) {
 	// Ensure swaggerEndPoint is not empty
 	if swaggerEndPoint == "" {
-		
+
 		return nil, errors.New("swaggerEndPoint cannot be empty")
 	}
 	// Ensure router is not nil
 	if router == nil {
-		
+
 		return nil, errors.New("router cannot be empty")
 	}
 
@@ -53,6 +59,7 @@ func SetupSwagger(router *mux.Router, swaggerEndPoint string) (*mux.Router, erro
 
 	return router, nil
 }
+
 // @title User Management API
 // @description This is a simple API for managing users
 // @basePath /api/v1
@@ -71,7 +78,11 @@ func main() {
 	r.HandleFunc("/user", createUser).Methods("POST")
 	r.HandleFunc("/user/{id}", updateUser).Methods("PUT")
 	r.HandleFunc("/user/{id}", deleteUser).Methods("DELETE")
-   
+
+	// Additional hooks for fuzzing?
+	r.HandleFunc("/exit", exitProgram).Methods("GET")
+	r.HandleFunc("/coverage", coverageSoFar).Methods("GET")
+
 	// Setup Swagger
 	swaggerEndPoint := "/docs/swagger.json"
 	router, err := SetupSwagger(r, swaggerEndPoint)
@@ -85,6 +96,7 @@ func main() {
 func serveHome(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("<h1>Welcome to User Management API</h1>"))
 }
+
 // @summary Get all users
 // @description Get a list of all users
 // @produce json
@@ -95,6 +107,7 @@ func getAllUsers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
 }
+
 // @summary Get one user
 // @description Get details of a single user by ID
 // @produce json
@@ -114,6 +127,67 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode("No user found with given id")
 }
+
+func exitProgram(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Calling Exit")
+	os.Exit(0)
+}
+
+func coverageSoFar(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Called CoverageSoFar")
+	covDir := uuid.NewString()
+	if err := os.MkdirAll(fmt.Sprintf("./%s", covDir), os.ModePerm); err != nil {
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(err.Error())
+		return
+	}
+	if err := coverage.WriteMetaDir(covDir); err != nil {
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(err.Error())
+		return
+	}
+	if err := coverage.WriteCountersDir(covDir); err != nil {
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(err.Error())
+		return
+	}
+	profileOutputFile := fmt.Sprintf("profile_%s.txt", covDir)
+	covDataCmd := exec.Command("go", "tool", "covdata", "textfmt", "-i", covDir, "-o", profileOutputFile)
+	if err := covDataCmd.Run(); err != nil {
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(err.Error())
+		return
+	}
+
+	profiles, err := cover.ParseProfiles(profileOutputFile)
+	if err != nil {
+		w.WriteHeader(400)
+		json.NewEncoder(w).Encode(err.Error())
+		return
+	}
+
+	// cleanup the cov dir and profile file
+	defer os.RemoveAll(covDir)
+	defer os.Remove(profileOutputFile)
+
+	coveredStmt := 0
+	totalStmt := 0
+	for _, profile := range profiles {
+		for _, block := range profile.Blocks {
+			if block.Count > 0 {
+				coveredStmt += block.NumStmt
+			}
+			totalStmt += block.NumStmt
+		}
+	}
+
+	result := make(map[string]any)
+	result["count"] = coveredStmt
+	result["stmt"] = totalStmt
+	result["coverage"] = fmt.Sprintf("%.2f%%", (100 * float64(coveredStmt) / float64(totalStmt)))
+	json.NewEncoder(w).Encode(result)
+}
+
 // @summary Create one user
 // @description Create a new user
 // @accept json
@@ -139,6 +213,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	users = append(users, user)
 	json.NewEncoder(w).Encode(user)
 }
+
 // @summary Update one user
 // @description Update details of an existing user
 // @accept json
@@ -164,6 +239,7 @@ func updateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
 // @summary Delete one user
 // @description Delete an existing user
 // @produce json
