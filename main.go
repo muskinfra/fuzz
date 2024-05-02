@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"reflect"
 	"runtime/coverage"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/leanovate/gopter/arbitrary"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"golang.org/x/tools/cover"
 )
@@ -82,6 +84,7 @@ func main() {
 	// Additional hooks for fuzzing?
 	r.HandleFunc("/exit", exitProgram).Methods("GET")
 	r.HandleFunc("/coverage", coverageSoFar).Methods("GET")
+	r.HandleFunc("/generate", generateUser).Methods("GET")
 
 	// Setup Swagger
 	swaggerEndPoint := "/docs/swagger.json"
@@ -188,6 +191,19 @@ func coverageSoFar(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+func generateUser(w http.ResponseWriter, r *http.Request) {
+	arbitraries := arbitrary.DefaultArbitraries()
+	var u User
+	userGenerator := arbitraries.GenForType(reflect.TypeOf(u))
+	sample, result := userGenerator.Sample()
+	if !result {
+		w.WriteHeader(500)
+		json.NewEncoder(w).Encode("Unable to generate a sample")
+		return
+	}
+	json.NewEncoder(w).Encode(sample)
+}
+
 // @summary Create one user
 // @description Create a new user
 // @accept json
@@ -209,7 +225,9 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rand.Seed(time.Now().UnixNano())
-	user.ID = strconv.Itoa(rand.Intn(100))
+	if user.ID == "" {
+		user.ID = strconv.Itoa(rand.Intn(100))
+	}
 	users = append(users, user)
 	json.NewEncoder(w).Encode(user)
 }
