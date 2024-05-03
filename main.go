@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -71,6 +72,7 @@ func main() {
 	r.HandleFunc("/user", createUser).Methods("POST")
 	r.HandleFunc("/user/{id}", updateUser).Methods("PUT")
 	r.HandleFunc("/user/{id}", deleteUser).Methods("DELETE")
+	r.HandleFunc("/exit", exitProgram).Methods("GET")
    
 	// Setup Swagger
 	swaggerEndPoint := "/docs/swagger.json"
@@ -182,4 +184,8 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+func exitProgram(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Calling Exit")
+	os.Exit(0)
 }
