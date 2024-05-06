@@ -28,7 +28,7 @@ func printProperties(def gjson.Result) {
 	}
 }
 func main() {
-	// Read Swagger JSON file
+	
 	
 	jsonData, err := ioutil.ReadFile("swagger.json")
 	if err != nil {
@@ -37,17 +37,17 @@ func main() {
 	}
 	swaggerJSON := string(jsonData)
 
-// Map to keep track of already printed combinations
+
 alreadyPrinted := make(map[string]bool)
 
-// Extract paths
+
 paths := gjson.Get(swaggerJSON, "paths")
 paths.ForEach(func(path, methods gjson.Result) bool {
 	pathStr := path.String()
 	methods.ForEach(func(method, details gjson.Result) bool {
 		methodStr := method.String()
 
-		// Extract parameters
+		
 		parameters := details.Get("parameters")
 		parameters.ForEach(func(_, param gjson.Result) bool {
 			paramName := param.Get("name").String()
@@ -60,7 +60,7 @@ paths.ForEach(func(path, methods gjson.Result) bool {
 			return true
 		})
 
-		// Extract response schema ref
+		
 		responses := details.Get("responses")
 		responses.ForEach(func(status, response gjson.Result) bool {
 			statusStr := status.String()
@@ -84,7 +84,7 @@ paths.ForEach(func(path, methods gjson.Result) bool {
 		fmt.Println("Name:", name.String())
 		// Print definition
 		printJSON(def)
-		return true // keep iterating
+		return true 
 	})
 
 
