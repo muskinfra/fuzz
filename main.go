@@ -277,3 +277,7 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+func exitProgram(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Calling Exit")
+	os.Exit(0)
+}
