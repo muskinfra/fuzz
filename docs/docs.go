@@ -24,6 +24,9 @@ const docTemplate = `{
                 "produces": [
                     "application/json"
                 ],
+                "tags": [
+                    "user"
+                ],
                 "summary": "Create one user",
                 "parameters": [
                     {
@@ -44,10 +47,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "description": "Bad Request"
                     }
                 }
             }
@@ -58,10 +58,13 @@ const docTemplate = `{
                 "produces": [
                     "application/json"
                 ],
+                "tags": [
+                    "user"
+                ],
                 "summary": "Get one user",
                 "parameters": [
                     {
-                        "type": "string",
+                        "type": "integer",
                         "description": "User ID",
                         "name": "id",
                         "in": "path",
@@ -91,10 +94,13 @@ const docTemplate = `{
                 "produces": [
                     "application/json"
                 ],
+                "tags": [
+                    "user"
+                ],
                 "summary": "Update one user",
                 "parameters": [
                     {
-                        "type": "string",
+                        "type": "integer",
                         "description": "User ID",
                         "name": "id",
                         "in": "path",
@@ -118,10 +124,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "description": "Not Found"
                     }
                 }
             },
@@ -130,10 +133,13 @@ const docTemplate = `{
                 "produces": [
                     "application/json"
                 ],
+                "tags": [
+                    "user"
+                ],
                 "summary": "Delete one user",
                 "parameters": [
                     {
-                        "type": "string",
+                        "type": "integer",
                         "description": "User ID",
                         "name": "id",
                         "in": "path",
@@ -148,10 +154,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "description": "Not Found"
                     }
                 }
             }
@@ -161,6 +164,9 @@ const docTemplate = `{
                 "description": "Get a list of all users",
                 "produces": [
                     "application/json"
+                ],
+                "tags": [
+                    "user"
                 ],
                 "summary": "Get all users",
                 "responses": {
@@ -182,7 +188,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "id": {
-                    "type": "string"
+                    "type": "integer"
                 },
                 "username": {
                     "type": "string"
@@ -196,7 +202,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "",
 	Host:             "",
-	BasePath:         "/api/v1",
+	BasePath:         "",
 	Schemes:          []string{},
 	Title:            "User Management API",
 	Description:      "This is a simple API for managing users",

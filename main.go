@@ -22,7 +22,7 @@ import (
 )
 
 type User struct {
-	ID       string `json:"id"`
+	ID       int    `json:"id"`
 	Username string `json:"username"`
 }
 
@@ -64,14 +64,14 @@ func SetupSwagger(router *mux.Router, swaggerEndPoint string) (*mux.Router, erro
 
 // @title User Management API
 // @description This is a simple API for managing users
-// @basePath /api/v1
+// @basePath 
 func main() {
 	fmt.Println("User Management API")
 	r := mux.NewRouter()
 
 	// seeding
-	users = append(users, User{ID: "1", Username: "user1"})
-	users = append(users, User{ID: "2", Username: "user2"})
+	users = append(users, User{ID: 1, Username: "user1"})
+	users = append(users, User{ID: 2, Username: "user2"})
 
 	// routing
 	r.HandleFunc("/", serveHome).Methods("GET")
@@ -100,21 +100,23 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("<h1>Welcome to User Management API</h1>"))
 }
 
+// @Tags user
 // @summary Get all users
 // @description Get a list of all users
 // @produce json
 // @success 200 {array} User
-// @router /users [get]
+// @router /users [get]]
 func getAllUsers(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Get all users")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
 }
 
+// @Tags user
 // @summary Get one user
 // @description Get details of a single user by ID
 // @produce json
-// @param id path string true "User ID"
+// @param id path int true "User ID"
 // @success 200 {object} User
 // @failure 404 {string} string
 // @router /user/{id} [get]
@@ -122,8 +124,13 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Get one user")
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
+	id, err := strconv.Atoi(params["id"])
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
 	for _, user := range users {
-		if user.ID == params["id"] {
+		if user.ID == id {
 			json.NewEncoder(w).Encode(user)
 			return
 		}
@@ -184,7 +191,7 @@ func coverageSoFar(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result := make(map[string]any)
+	result := make(map[string]interface{})
 	result["count"] = coveredStmt
 	result["stmt"] = totalStmt
 	result["coverage"] = fmt.Sprintf("%.2f%%", (100 * float64(coveredStmt) / float64(totalStmt)))
@@ -203,81 +210,94 @@ func generateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(sample)
 }
-
+// @Tags user
 // @summary Create one user
 // @description Create a new user
 // @accept json
 // @produce json
 // @param body body User true "User details"
 // @success 200 {object} User
-// @failure 400 {string} string
+// @failure 400
 // @router /user [post]
 func createUser(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Create one user")
 	w.Header().Set("Content-Type", "application/json")
 	if r.Body == nil {
-		json.NewEncoder(w).Encode("Please send some data")
+		http.Error(w, "Please send some data", http.StatusBadRequest)
+		return
 	}
 	var user User
 	_ = json.NewDecoder(r.Body).Decode(&user)
 	if user.IsEmpty() {
-		json.NewEncoder(w).Encode("No data inside JSON")
+		http.Error(w, "No data inside JSON", http.StatusBadRequest)
 		return
 	}
 	rand.Seed(time.Now().UnixNano())
-	if user.ID == "" {
-		user.ID = strconv.Itoa(rand.Intn(100))
+	if user.ID == 0 {
+		user.ID = rand.Intn(100)
 	}
 	users = append(users, user)
 	json.NewEncoder(w).Encode(user)
 }
 
+// @Tags user
 // @summary Update one user
 // @description Update details of an existing user
 // @accept json
 // @produce json
-// @param id path string true "User ID"
+// @param id path int true "User ID"
 // @param body body User true "Updated user details"
 // @success 200 {object} User
-// @failure 404 {string} string
+// @failure 404
 // @router /user/{id} [put]
 func updateUser(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Update one user")
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
+	id, err := strconv.Atoi(params["id"])
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
 	for index, user := range users {
-		if user.ID == params["id"] {
+		if user.ID == id {
 			users = append(users[:index], users[index+1:]...)
 			var user User
 			_ = json.NewDecoder(r.Body).Decode(&user)
-			user.ID = params["id"]
+			user.ID = id
 			users = append(users, user)
 			json.NewEncoder(w).Encode(user)
 			return
 		}
 	}
+	http.Error(w, "User not found", http.StatusNotFound)
 }
 
+
+// @Tags user
 // @summary Delete one user
 // @description Delete an existing user
 // @produce json
-// @param id path string true "User ID"
+// @param id path int true "User ID"
 // @success 200 {string} string
-// @failure 404 {string} string
+// @failure 404
 // @router /user/{id} [delete]
 func deleteUser(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Delete one user")
 	w.Header().Set("Content-Type", "application/json")
 	params := mux.Vars(r)
+	id, err := strconv.Atoi(params["id"])
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
 	for index, user := range users {
-		if user.ID == params["id"] {
+		if user.ID == id {
 			users = append(users[:index], users[index+1:]...)
 			json.NewEncoder(w).Encode("User deleted successfully")
 			return
 		}
 	}
+	http.Error(w, "User not found", http.StatusNotFound)
 }
-func exitProgram(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Calling Exit")
-	os.Exit(0)
-}
+

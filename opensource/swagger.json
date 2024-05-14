@@ -5,7 +5,6 @@
         "title": "User Management API",
         "contact": {}
     },
-    "basePath": "",
     "paths": {
         "/user": {
             "post": {
@@ -15,6 +14,9 @@
                 ],
                 "produces": [
                     "application/json"
+                ],
+                "tags": [
+                    "user"
                 ],
                 "summary": "Create one user",
                 "parameters": [
@@ -36,10 +38,7 @@
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "description": "Bad Request"
                     }
                 }
             }
@@ -50,10 +49,13 @@
                 "produces": [
                     "application/json"
                 ],
+                "tags": [
+                    "user"
+                ],
                 "summary": "Get one user",
                 "parameters": [
                     {
-                        "type": "string",
+                        "type": "integer",
                         "description": "User ID",
                         "name": "id",
                         "in": "path",
@@ -83,10 +85,13 @@
                 "produces": [
                     "application/json"
                 ],
+                "tags": [
+                    "user"
+                ],
                 "summary": "Update one user",
                 "parameters": [
                     {
-                        "type": "string",
+                        "type": "integer",
                         "description": "User ID",
                         "name": "id",
                         "in": "path",
@@ -110,10 +115,7 @@
                         }
                     },
                     "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "description": "Not Found"
                     }
                 }
             },
@@ -122,10 +124,13 @@
                 "produces": [
                     "application/json"
                 ],
+                "tags": [
+                    "user"
+                ],
                 "summary": "Delete one user",
                 "parameters": [
                     {
-                        "type": "string",
+                        "type": "integer",
                         "description": "User ID",
                         "name": "id",
                         "in": "path",
@@ -140,10 +145,7 @@
                         }
                     },
                     "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "string"
-                        }
+                        "description": "Not Found"
                     }
                 }
             }
@@ -153,6 +155,9 @@
                 "description": "Get a list of all users",
                 "produces": [
                     "application/json"
+                ],
+                "tags": [
+                    "user"
                 ],
                 "summary": "Get all users",
                 "responses": {
@@ -174,7 +179,7 @@
             "type": "object",
             "properties": {
                 "id": {
-                    "type": "string"
+                    "type": "integer"
                 },
                 "username": {
                     "type": "string"

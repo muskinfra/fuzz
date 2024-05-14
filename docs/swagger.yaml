@@ -1,9 +1,8 @@
-basePath: /api/v1
 definitions:
   main.User:
     properties:
       id:
-        type: string
+        type: integer
       username:
         type: string
     type: object
@@ -33,9 +32,9 @@ paths:
             $ref: '#/definitions/main.User'
         "400":
           description: Bad Request
-          schema:
-            type: string
       summary: Create one user
+      tags:
+      - user
   /user/{id}:
     delete:
       description: Delete an existing user
@@ -44,7 +43,7 @@ paths:
         in: path
         name: id
         required: true
-        type: string
+        type: integer
       produces:
       - application/json
       responses:
@@ -54,9 +53,9 @@ paths:
             type: string
         "404":
           description: Not Found
-          schema:
-            type: string
       summary: Delete one user
+      tags:
+      - user
     get:
       description: Get details of a single user by ID
       parameters:
@@ -64,7 +63,7 @@ paths:
         in: path
         name: id
         required: true
-        type: string
+        type: integer
       produces:
       - application/json
       responses:
@@ -77,6 +76,8 @@ paths:
           schema:
             type: string
       summary: Get one user
+      tags:
+      - user
     put:
       consumes:
       - application/json
@@ -86,7 +87,7 @@ paths:
         in: path
         name: id
         required: true
-        type: string
+        type: integer
       - description: Updated user details
         in: body
         name: body
@@ -102,9 +103,9 @@ paths:
             $ref: '#/definitions/main.User'
         "404":
           description: Not Found
-          schema:
-            type: string
       summary: Update one user
+      tags:
+      - user
   /users:
     get:
       description: Get a list of all users
@@ -118,4 +119,6 @@ paths:
               $ref: '#/definitions/main.User'
             type: array
       summary: Get all users
+      tags:
+      - user
 swagger: "2.0"
