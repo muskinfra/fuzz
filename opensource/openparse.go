@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v2"
@@ -62,7 +63,6 @@ func ParseAPIDefinition(yamlData []byte) ([]EndpointInfo, error) {
 	}
 
 	apiSpecConverted := convertMapInterfaceToString(apiSpec)
-	// fmt.Printf("Parsed YAML data: %+v\n", apiSpecConverted)
 
 	paths, ok := apiSpecConverted["paths"].(map[string]interface{})
 	if !ok {
@@ -160,19 +160,19 @@ func randomString() string {
 	return uuid.New().String()
 }
 
-func triggerAPI(endpoint EndpointInfo) int {
+func triggerAPI(endpoint EndpointInfo) (int, int) {
 	url := "http://localhost:4000" + endpoint.Path
 	jsonData := generateRandomData(endpoint.RequestBody)
 	requestBody, err := json.Marshal(jsonData)
 	if err != nil {
 		fmt.Println("Error marshalling request body:", err)
-		return 0
+		return 0, 0
 	}
 
 	req, err := http.NewRequest(strings.ToUpper(endpoint.Method), url, bytes.NewBuffer(requestBody))
 	if err != nil {
 		fmt.Println("Error creating request:", err)
-		return 0
+		return 0, 0
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -183,25 +183,26 @@ func triggerAPI(endpoint EndpointInfo) int {
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println("Error triggering API:", err)
-		return 0
+		return 0, 0
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println("Error reading response body:", err)
-		return 0
+		return 0, 0
 	}
 
 	fmt.Printf("Response for %s %s:\n%s\n", endpoint.Method, endpoint.Path, body)
+	fmt.Printf("Status Code: %d\n", resp.StatusCode)
 
 	var responseMap map[string]interface{}
 	json.Unmarshal(body, &responseMap)
 	if id, ok := responseMap["id"].(float64); ok {
-		return int(id)
+		return int(id), resp.StatusCode
 	}
 
-	return 0
+	return 0, resp.StatusCode
 }
 
 func printCoverage(authToken string) {
@@ -261,28 +262,40 @@ func main() {
 
 	printCoverage(authToken)
 
-	// Trigger POST to create resource and get the ID
-	postID := triggerAPI(postEndpoint)
-	if postID == 0 {
-		fmt.Println("Failed to create resource, ID not found in response.")
-		return
+	for {
+		// Trigger POST to create resource and get the ID
+		postID, statusCode := triggerAPI(postEndpoint)
+		fmt.Printf("POST Status Code: %d\n", statusCode)
+		printCoverage(authToken)
+		if postID == 0 {
+			fmt.Println("Failed to create resource, ID not found in response.")
+			return
+		}
+
+		// Update the endpoint paths with the new ID
+		putPath := strings.ReplaceAll(putEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
+		getPath := strings.ReplaceAll(getEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
+		deletePath := strings.ReplaceAll(deleteEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
+
+		// Trigger PUT to update resource
+		_, statusCode = triggerAPI(EndpointInfo{Path: putPath, Method: putEndpoint.Method, RequestBody: putEndpoint.RequestBody, ResponseBody: putEndpoint.ResponseBody})
+		fmt.Printf("PUT Status Code: %d\n", statusCode)
+		printCoverage(authToken)
+
+		// Trigger GET to retrieve resource
+		_, statusCode = triggerAPI(EndpointInfo{Path: getPath, Method: getEndpoint.Method, RequestBody: getEndpoint.RequestBody, ResponseBody: getEndpoint.ResponseBody})
+		fmt.Printf("GET Status Code: %d\n", statusCode)
+		printCoverage(authToken)
+
+		// Trigger DELETE to remove resource
+		_, statusCode = triggerAPI(EndpointInfo{Path: deletePath, Method: deleteEndpoint.Method, RequestBody: deleteEndpoint.RequestBody, ResponseBody: deleteEndpoint.ResponseBody})
+		fmt.Printf("DELETE Status Code: %d\n", statusCode)
+		printCoverage(authToken)
+
+		// Wait for a specific interval before the next iteration
+		time.Sleep(1 * time.Second) // Adjust the interval as needed
 	}
-
-	// Trigger PUT to update resource
-	putEndpoint.Path = strings.ReplaceAll(putEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
-	triggerAPI(putEndpoint)
-
-	// Trigger GET to retrieve resource
-	getEndpoint.Path = strings.ReplaceAll(getEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
-	triggerAPI(getEndpoint)
-
-	// Trigger DELETE to remove resource
-	deleteEndpoint.Path = strings.ReplaceAll(deleteEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
-	triggerAPI(deleteEndpoint)
-
-	printCoverage(authToken)
 }
-
 
 func printSchema(schema map[string]interface{}) {
 	schemaJSON, _ := json.MarshalIndent(schema, "", "  ")
