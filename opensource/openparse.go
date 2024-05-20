@@ -3,259 +3,288 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
-	"strconv"
 	"strings"
 
-	"github.com/bxcodec/faker/v3"
-	"github.com/tidwall/gjson"
+	"github.com/google/uuid"
+	"gopkg.in/yaml.v2"
 )
 
-
-func printJSON(data gjson.Result) {
-	fmt.Println(data.String())
+type EndpointInfo struct {
+	Path         string                 `json:"path"`
+	Method       string                 `json:"method"`
+	RequestBody  map[string]interface{} `json:"requestBody,omitempty"`
+	ResponseBody map[string]interface{} `json:"responseBody,omitempty"`
 }
 
+var definitions map[string]interface{}
+var authToken = ""
 
-func GenerateFakeDataJSON(schemaJSON string) (string, error) {
-	// Parse the JSON schema
-	var schema map[string]string
-	err := json.Unmarshal([]byte(schemaJSON), &schema)
-	if err != nil {
-		return "", err
-	}
-
-	// Modify schema to map "integer" to "int"
-	for key, value := range schema {
-		if value == "integer" {
-			schema[key] = "int"
-		}
-	}
-	fmt.Println("print",schema)
-	// Generate fake data based on the schema
-	fakeData := make(map[string]interface{})
-	fmt.Println("value",fakeData)
-	for key, value := range schema {
-		switch value {
-		case "string":
-			fakeData[key] = faker.Word()
-		case "int":
-			intValue1, err := faker.RandomInt(100)
-			intValue := intValue1[0]
-			fmt.Print("valueee",intValue)
-			if err != nil {
-				return "", err
-			}
-			fakeData[key] = intValue
-			
-		// Add cases for other types as needed
+func convertMapInterfaceToString(input map[interface{}]interface{}) map[string]interface{} {
+	output := make(map[string]interface{})
+	for key, value := range input {
+		strKey := fmt.Sprintf("%v", key)
+		switch value.(type) {
+		case map[interface{}]interface{}:
+			output[strKey] = convertMapInterfaceToString(value.(map[interface{}]interface{}))
+		case []interface{}:
+			output[strKey] = convertSliceInterfaceToString(value.([]interface{}))
 		default:
-			return "", fmt.Errorf("unsupported data type: %s", value)
+			output[strKey] = value
+		}
+	}
+	return output
+}
+
+func convertSliceInterfaceToString(input []interface{}) []interface{} {
+	output := make([]interface{}, len(input))
+	for i, value := range input {
+		switch value.(type) {
+		case map[interface{}]interface{}:
+			output[i] = convertMapInterfaceToString(value.(map[interface{}]interface{}))
+		case []interface{}:
+			output[i] = convertSliceInterfaceToString(value.([]interface{}))
+		default:
+			output[i] = value
+		}
+	}
+	return output
+}
+
+func ParseAPIDefinition(yamlData []byte) ([]EndpointInfo, error) {
+	var apiSpec map[interface{}]interface{}
+	err := yaml.Unmarshal(yamlData, &apiSpec)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling YAML data: %w", err)
+	}
+
+	apiSpecConverted := convertMapInterfaceToString(apiSpec)
+	// fmt.Printf("Parsed YAML data: %+v\n", apiSpecConverted)
+
+	paths, ok := apiSpecConverted["paths"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("paths section not found in API definition")
+	}
+
+	definitions, ok = apiSpecConverted["definitions"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("definitions section not found in API definition")
+	}
+
+	var endpoints []EndpointInfo
+	for path, pathData := range paths {
+		pathDetails := pathData.(map[string]interface{})
+		for method, methodData := range pathDetails {
+			methodInfo := methodData.(map[string]interface{})
+			info := EndpointInfo{
+				Path:   path,
+				Method: method,
+			}
+
+			if parameters, ok := methodInfo["parameters"].([]interface{}); ok {
+				for _, param := range parameters {
+					paramMap := param.(map[string]interface{})
+					if paramMap["in"] == "body" {
+						info.RequestBody = resolveRefSchema(paramMap["schema"])
+					}
+				}
+			}
+
+			if responses, ok := methodInfo["responses"].(map[string]interface{}); ok {
+				for _, response := range responses {
+					responseMap := response.(map[string]interface{})
+					if schema, ok := responseMap["schema"]; ok {
+						info.ResponseBody = resolveRefSchema(schema)
+						break
+					}
+				}
+			}
+
+			endpoints = append(endpoints, info)
 		}
 	}
 
-	// Convert fakeData to JSON
-	fmt.Print("key",fakeData)
-	fakeDataJSON, err := json.Marshal(fakeData)
-	if err != nil {
-		return "", err
-	}
-
-	return string(fakeDataJSON), nil
+	return endpoints, nil
 }
 
-
-
-func triggerAPI(apiURL, methodStr, payload string) (int, error) {
-	// Create a new HTTP request
-	req, err := http.NewRequest(methodStr, apiURL, bytes.NewBuffer([]byte(payload)))
-	if err != nil {
-		return 0, err
+func resolveRefSchema(data interface{}) map[string]interface{} {
+	dataMap := data.(map[string]interface{})
+	if ref, ok := dataMap["$ref"].(string); ok {
+		refParts := strings.Split(ref, "/")
+		definitionName := refParts[len(refParts)-1]
+		if definition, ok := definitions[definitionName]; ok {
+			return resolveRefSchema(definition)
+		}
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if properties, ok := dataMap["properties"].(map[string]interface{}); ok {
+		for key, prop := range properties {
+			properties[key] = resolveRefSchema(prop)
+		}
+	}
+	return dataMap
+}
 
-	// Send the request using an HTTP client
+func generateRandomData(schema map[string]interface{}) map[string]interface{} {
+	data := make(map[string]interface{})
+	if properties, ok := schema["properties"].(map[string]interface{}); ok {
+		for key, prop := range properties {
+			propMap := prop.(map[string]interface{})
+			data[key] = generateRandomValue(propMap)
+		}
+	}
+	return data
+}
+
+func generateRandomValue(schema map[string]interface{}) interface{} {
+	switch schema["type"] {
+	case "string":
+		return randomString()
+	case "integer":
+		return rand.Intn(10)
+	case "boolean":
+		return rand.Intn(2) == 1
+	case "object":
+		return generateRandomData(schema)
+	case "array":
+		itemSchema := schema["items"].(map[string]interface{})
+		return []interface{}{generateRandomValue(itemSchema)}
+	default:
+		return nil
+	}
+}
+
+func randomString() string {
+	return uuid.New().String()
+}
+
+func triggerAPI(endpoint EndpointInfo) int {
+	url := "http://localhost:4000" + endpoint.Path
+	jsonData := generateRandomData(endpoint.RequestBody)
+	requestBody, err := json.Marshal(jsonData)
+	if err != nil {
+		fmt.Println("Error marshalling request body:", err)
+		return 0
+	}
+
+	req, err := http.NewRequest(strings.ToUpper(endpoint.Method), url, bytes.NewBuffer(requestBody))
+	if err != nil {
+		fmt.Println("Error creating request:", err)
+		return 0
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+authToken)
+	req.Header.Set("User-Agent", "Go-Client")
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, err
+		fmt.Println("Error triggering API:", err)
+		return 0
 	}
 	defer resp.Body.Close()
 
-	// Check if the request was successful (status code 2xx)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return 0, fmt.Errorf("request failed with status: %s", resp.Status)
-	}
-
-	// Read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return 0, err
+		fmt.Println("Error reading response body:", err)
+		return 0
 	}
 
-	// Parse the JSON response into a map
-	var responseData map[string]interface{}
-	if err := json.Unmarshal(body, &responseData); err != nil {
-		return 0, err
-	}
-	fmt.Println("Response Body:", string(body))
-	// Extract the id field from the response
-	id, ok := responseData["id"].(float64)
-	if !ok {
-		return 0, errors.New("unable to extract id from response body")
+	fmt.Printf("Response for %s %s:\n%s\n", endpoint.Method, endpoint.Path, body)
+
+	var responseMap map[string]interface{}
+	json.Unmarshal(body, &responseMap)
+	if id, ok := responseMap["id"].(float64); ok {
+		return int(id)
 	}
 
-	// Convert the id to an integer and return
-	return int(id), nil
+	return 0
 }
 
+func printCoverage(authToken string) {
+	coverageURL := "http://localhost:4000/coverage"
 
-
-
-
-func parseDefinitionObject(ref string) (string, string) {
-	// Split the string by "/"
-	parts := strings.Split(ref, "/")
-
-	// Extract the last part
-	definition := parts[len(parts)-2]
-	objectName := parts[len(parts)-1]
-
-	return definition, objectName
-}
-var payload string
-var id int
-func main() {
-	jsonData, err := ioutil.ReadFile("swagger.json")
+	req, err := http.NewRequest("GET", coverageURL, nil)
 	if err != nil {
-		fmt.Println("Error reading Swagger JSON file:", err)
+		fmt.Println("Error creating coverage request:", err)
 		return
 	}
-	swaggerJSON := string(jsonData)
-	definitions := gjson.Get(swaggerJSON, "definitions")
-	definitions.ForEach(func(defName, defDetails gjson.Result) bool {
-		// defNameStr := defName.String()
-		// fmt.Printf("Name: %s\n", defNameStr)
-	
-		// Extract properties
-		properties := defDetails.Get("properties")
-		propMap := make(map[string]interface{})
-		properties.ForEach(func(propName, propDetails gjson.Result) bool {
-			propNameStr := propName.String()
-			propType := propDetails.Get("type").String()
-			propMap[propNameStr] = propType
-			return true
-		})
-	
-		// Convert propMap to JSON
-		propJSON, err := json.MarshalIndent(propMap, "", "    ")
-		if err != nil {
-			fmt.Println("Error marshalling JSON:", err)
-			return true
-		}
-	    payload =string(propJSON)
-		return true
-	})
-	alreadyPrinted := make(map[string]bool)
 
-	paths := gjson.Get(swaggerJSON, "paths")
-	paths.ForEach(func(path, methods gjson.Result) bool {
-		pathStr := path.String()
-		methods.ForEach(func(method, details gjson.Result) bool {
-			methodStr := method.String()
+	req.Header.Set("Authorization", "Bearer "+authToken)
 
-			parameters := details.Get("parameters")
-			parameters.ForEach(func(_, param gjson.Result) bool {
-				paramName := param.Get("name").String()
-				paramSchemaRef := param.Get("schema.$ref").String()
-				key := fmt.Sprintf("%s-%s-%s-%s", pathStr, methodStr, paramName, paramSchemaRef)
-				if !alreadyPrinted[key] {
-					fmt.Printf("Path: %s, Method: %s, Parameter Name: %s, Parameter Schema Ref: %s\n", pathStr, methodStr, paramName, paramSchemaRef)
-					alreadyPrinted[key] = true
-				}
-				// definition, objectName := parseDefinitionObject(paramSchemaRef)
-				// fmt.Println(definition,objectName)
-				methodStr := strings.ToUpper(method.String())
-				
-				if paramName == "body" { // Check if parameter is body
-					apiURL := "http://localhost:4000" + pathStr
-					
-					if err != nil {
-						fmt.Println("Error generating payload:", err)
-						return true
-					}
-					fmt.Println(payload, apiURL, apiURL)
-					fakePayload, err := GenerateFakeDataJSON(payload)
-					if err != nil {
-						fmt.Println("Error generating payload:", err)
-					}
-					payload = fakePayload
-					fmt.Println("payload", payload)
-					id , err = triggerAPI(apiURL, methodStr, payload)
-					fmt.Println("ID:", id)
-					if err != nil {
-						fmt.Println("Error triggering API:", err)
-					} 
-					apiURL = "http://localhost:4000/coverage" 
-					// After successful POST request, store the user ID
-					// Trigger the GET request
-					_, err = triggerAPI(apiURL,"GET", "")
-					if err != nil {
-						fmt.Println("Error triggering GET API:", err)
-					}
-				}
-					fmt.Println("ID:", id)
-					apiURL := strings.ReplaceAll(pathStr, "{id}", strconv.Itoa(id))
-
-					
-					apiURL = "http://localhost:4000" + apiURL
-					// After successful POST request, store the user ID
-					// Trigger the GET request
-					_, err = triggerAPI(apiURL,methodStr, "")
-					if err != nil {
-						fmt.Println("Error triggering GET API:", err)
-					}
-					apiURL = "http://localhost:4000/coverage" 
-					// After successful POST request, store the user ID
-					// Trigger the GET request
-					_, err = triggerAPI(apiURL,"GET", "")
-					if err != nil {
-						fmt.Println("Error triggering GET API:", err)
-					}     
-				
-				
-				return true
-			})
-
-			responses := details.Get("responses")
-			responses.ForEach(func(status, response gjson.Result) bool {
-				statusStr := status.String()
-				responseSchemaRef := response.Get("schema.$ref").String()
-				key := fmt.Sprintf("%s-%s-%s", pathStr, methodStr, statusStr)
-				if !alreadyPrinted[key] {
-					fmt.Printf("Path: %s, Method: %s, Response Status: %s, Response Schema Ref: %s\n", pathStr, methodStr, statusStr, responseSchemaRef)
-					alreadyPrinted[key] = true
-				}
-
-	
-
-				return true
-			})
-
-			return true
-		})
-		return true
-	})
-	apiURL := "http://localhost:4000/exit" 
-	// After successful POST request, store the user ID
-	// Trigger the GET request
-	_, err = triggerAPI(apiURL,"GET", "")
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("Error triggering GET API:", err)
-	}     
+		fmt.Println("Error getting coverage:", err)
+		return
+	}
+	defer resp.Body.Close()
 
-    
+	coverageBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading coverage response body:", err)
+		return
+	}
+
+	fmt.Println("Coverage Response:")
+	fmt.Println(string(coverageBody))
+}
+
+func main() {
+	yamlData, err := ioutil.ReadFile("swagger.yaml")
+	if err != nil {
+		fmt.Println("Error reading YAML file:", err)
+		return
+	}
+
+	endpointInfos, err := ParseAPIDefinition(yamlData)
+	if err != nil {
+		fmt.Println("Error parsing API definition:", err)
+		return
+	}
+
+	var postEndpoint, putEndpoint, getEndpoint, deleteEndpoint EndpointInfo
+	for _, info := range endpointInfos {
+		if strings.ToUpper(info.Method) == "POST" {
+			postEndpoint = info
+		} else if strings.ToUpper(info.Method) == "PUT" {
+			putEndpoint = info
+		} else if strings.ToUpper(info.Method) == "GET" {
+			getEndpoint = info
+		} else if strings.ToUpper(info.Method) == "DELETE" {
+			deleteEndpoint = info
+		}
+	}
+
+	printCoverage(authToken)
+
+	// Trigger POST to create resource and get the ID
+	postID := triggerAPI(postEndpoint)
+	if postID == 0 {
+		fmt.Println("Failed to create resource, ID not found in response.")
+		return
+	}
+
+	// Trigger PUT to update resource
+	putEndpoint.Path = strings.ReplaceAll(putEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
+	triggerAPI(putEndpoint)
+
+	// Trigger GET to retrieve resource
+	getEndpoint.Path = strings.ReplaceAll(getEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
+	triggerAPI(getEndpoint)
+
+	// Trigger DELETE to remove resource
+	deleteEndpoint.Path = strings.ReplaceAll(deleteEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
+	triggerAPI(deleteEndpoint)
+
+	printCoverage(authToken)
+}
+
+
+func printSchema(schema map[string]interface{}) {
+	schemaJSON, _ := json.MarshalIndent(schema, "", "  ")
+	fmt.Println(string(schemaJSON))
 }
