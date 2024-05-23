@@ -22,7 +22,7 @@ type EndpointInfo struct {
 }
 
 var definitions map[string]interface{}
-var authToken = ""
+var authToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdXRob3JpemVkIjoidHJ1ZSIsImxvZ2luX2lkIjoiMTExMTExMTExMSIsImxvZ2luX3R5cGUiOiJwaG9uZW5vIiwicmVxdWVzdF91c2VyX2lkIjoxLCJ0ZW5hbnRfaWQiOiIzNDQ0Y2JjNC0wMTA0LTU5YjUtYjU5MS00ZmUzOTY0NmNiNTEifQ.vGwblwb1yHqIweLB4M6lwyQd7rXI3lInFRx9mKqGIjo"
 
 func convertMapInterfaceToString(input map[interface{}]interface{}) map[string]interface{} {
 	output := make(map[string]interface{})
@@ -143,7 +143,7 @@ func generateRandomValue(schema map[string]interface{}) interface{} {
 	case "string":
 		return randomString()
 	case "integer":
-		return rand.Intn(10)
+		return rand.Intn(100)
 	case "boolean":
 		return rand.Intn(2) == 1
 	case "object":
@@ -161,7 +161,7 @@ func randomString() string {
 }
 
 func triggerAPI(endpoint EndpointInfo) (int, int) {
-	url := "http://localhost:4000" + endpoint.Path
+	url := "http://localhost:9032" + endpoint.Path
 	jsonData := generateRandomData(endpoint.RequestBody)
 	requestBody, err := json.Marshal(jsonData)
 	if err != nil {
