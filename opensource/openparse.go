@@ -161,7 +161,7 @@ func randomString() string {
 }
 
 func triggerAPI(endpoint EndpointInfo) (int, int) {
-	url := "http://localhost:9032" + endpoint.Path
+	url := "http://localhost:4000" + endpoint.Path
 	jsonData := generateRandomData(endpoint.RequestBody)
 	requestBody, err := json.Marshal(jsonData)
 	if err != nil {
