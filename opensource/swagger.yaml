@@ -1,124 +1,156 @@
 definitions:
-  main.User:
+  identity-service_identity_dataMapper_v1_http.Attribute:
     properties:
-      id:
-        type: integer
-      username:
+      attribute_value:
         type: string
+      is_verified:
+        type: boolean
+    type: object
+  identity-service_identity_dataMapper_v1_http.Policy:
+    properties:
+      attributes_list:
+        items:
+          type: string
+        type: array
+      operator_type:
+        type: string
+      policy_type:
+        type: string
+    type: object
+  v1.Attributes:
+    properties:
+      aadhaar:
+        $ref: '#/definitions/identity-service_identity_dataMapper_v1_http.Attribute'
+      email:
+        $ref: '#/definitions/identity-service_identity_dataMapper_v1_http.Attribute'
+      employee_code:
+        $ref: '#/definitions/identity-service_identity_dataMapper_v1_http.Attribute'
+      gst:
+        $ref: '#/definitions/identity-service_identity_dataMapper_v1_http.Attribute'
+      gst_location:
+        $ref: '#/definitions/identity-service_identity_dataMapper_v1_http.Attribute'
+      pan:
+        $ref: '#/definitions/identity-service_identity_dataMapper_v1_http.Attribute'
+      phone:
+        $ref: '#/definitions/identity-service_identity_dataMapper_v1_http.Attribute'
+    type: object
+  v1.IdentityRequestPayload:
+    properties:
+      attributes:
+        $ref: '#/definitions/v1.Attributes'
+      policy:
+        $ref: '#/definitions/identity-service_identity_dataMapper_v1_http.Policy'
+      user_id:
+        type: integer
+      user_type:
+        type: string
+    type: object
+  v1.IdentityResponsePayload:
+    properties:
+      conflict_reason:
+        type: string
+      gid:
+        type: string
+      remark:
+        type: string
+    type: object
+  v1.IdentityUpdateRequestPayload:
+    properties:
+      attributes:
+        $ref: '#/definitions/v1.Attributes'
+      gid:
+        type: string
+    type: object
+  v1.IdentityUpdateResponsePayload:
+    properties:
+      remarks:
+        type: string
+      success:
+        type: boolean
     type: object
 info:
   contact: {}
-  description: This is a simple API for managing users
-  title: User Management API
+  description: Identity Service Apis.
+  title: Identity Services API
+  version: "1.0"
 paths:
-  /user:
+  /create-identity/v1:
     post:
       consumes:
       - application/json
-      description: Create a new user
+      description: Create a new identity.
       parameters:
-      - description: User details
+      - description: Identity request payload
         in: body
-        name: body
+        name: IdentityRequestPayload
         required: true
         schema:
-          $ref: '#/definitions/main.User'
+          $ref: '#/definitions/v1.IdentityRequestPayload'
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Successfully created identity
           schema:
-            $ref: '#/definitions/main.User'
+            $ref: '#/definitions/v1.IdentityResponsePayload'
         "400":
           description: Bad Request
-      summary: Create one user
-      tags:
-      - user
-  /user/{id}:
-    delete:
-      description: Delete an existing user
-      parameters:
-      - description: User ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
           schema:
             type: string
-        "404":
-          description: Not Found
-      summary: Delete one user
-      tags:
-      - user
-    get:
-      description: Get details of a single user by ID
-      parameters:
-      - description: User ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/main.User'
-        "404":
-          description: Not Found
+        "401":
+          description: Unauthorized
           schema:
             type: string
-      summary: Get one user
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerToken: []
+      summary: Create Identity
       tags:
-      - user
-    put:
+      - Identity
+  /update-identity/v1:
+    post:
       consumes:
       - application/json
-      description: Update details of an existing user
+      description: Update an existing identity.
       parameters:
-      - description: User ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Updated user details
+      - description: Identity update request payload
         in: body
-        name: body
+        name: IdentityUpdateRequestPayload
         required: true
         schema:
-          $ref: '#/definitions/main.User'
+          $ref: '#/definitions/v1.IdentityUpdateRequestPayload'
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Successfully updated identity
           schema:
-            $ref: '#/definitions/main.User'
-        "404":
-          description: Not Found
-      summary: Update one user
-      tags:
-      - user
-  /users:
-    get:
-      description: Get a list of all users
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
+            $ref: '#/definitions/v1.IdentityUpdateResponsePayload'
+        "400":
+          description: Bad Request
           schema:
-            items:
-              $ref: '#/definitions/main.User'
-            type: array
-      summary: Get all users
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerToken: []
+      summary: Update Identity
       tags:
-      - user
+      - Identity
+schemes:
+- http
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

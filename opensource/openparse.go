@@ -17,6 +17,7 @@ import (
 type EndpointInfo struct {
 	Path         string                 `json:"path"`
 	Method       string                 `json:"method"`
+	Tags         []string               `json:"tags"`
 	RequestBody  map[string]interface{} `json:"requestBody,omitempty"`
 	ResponseBody map[string]interface{} `json:"responseBody,omitempty"`
 }
@@ -24,6 +25,7 @@ type EndpointInfo struct {
 var definitions map[string]interface{}
 var authToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdXRob3JpemVkIjoidHJ1ZSIsImxvZ2luX2lkIjoiMTExMTExMTExMSIsImxvZ2luX3R5cGUiOiJwaG9uZW5vIiwicmVxdWVzdF91c2VyX2lkIjoxLCJ0ZW5hbnRfaWQiOiIzNDQ0Y2JjNC0wMTA0LTU5YjUtYjU5MS00ZmUzOTY0NmNiNTEifQ.vGwblwb1yHqIweLB4M6lwyQd7rXI3lInFRx9mKqGIjo"
 
+// Convert map[interface{}]interface{} to map[string]interface{}
 func convertMapInterfaceToString(input map[interface{}]interface{}) map[string]interface{} {
 	output := make(map[string]interface{})
 	for key, value := range input {
@@ -79,9 +81,16 @@ func ParseAPIDefinition(yamlData []byte) ([]EndpointInfo, error) {
 		pathDetails := pathData.(map[string]interface{})
 		for method, methodData := range pathDetails {
 			methodInfo := methodData.(map[string]interface{})
+			tags := []string{}
+			if tagList, ok := methodInfo["tags"].([]interface{}); ok {
+				for _, tag := range tagList {
+					tags = append(tags, tag.(string))
+				}
+			}
 			info := EndpointInfo{
 				Path:   path,
 				Method: method,
+				Tags:   tags,
 			}
 
 			if parameters, ok := methodInfo["parameters"].([]interface{}); ok {
@@ -127,111 +136,200 @@ func resolveRefSchema(data interface{}) map[string]interface{} {
 	return dataMap
 }
 
-func generateRandomData(schema map[string]interface{}) map[string]interface{} {
+func generateRandomData(schema map[string]interface{}, gid string) map[string]interface{} {
 	data := make(map[string]interface{})
 	if properties, ok := schema["properties"].(map[string]interface{}); ok {
 		for key, prop := range properties {
 			propMap := prop.(map[string]interface{})
-			data[key] = generateRandomValue(propMap)
+			data[key] = generateRandomValue(key, propMap, gid)
 		}
 	}
 	return data
 }
 
-func generateRandomValue(schema map[string]interface{}) interface{} {
+func generateRandomValue(fieldName string, schema map[string]interface{}, gid string) interface{} {
+	switch fieldName {
+	case "operator_type":
+		return getRandomOperatorType()
+	case "policy_type":
+		return getRandomPolicyType()
+	case "attributes_list":
+		return getRandomList()
+	case "gid":
+		return gid // Use the gid extracted from the POST response
+	}
+
 	switch schema["type"] {
 	case "string":
+		switch fieldName {
+		case "gst":
+			return generateRandomGST()
+		case "pan":
+			return generateRandomPAN()
+		case "phone":
+			return generateRandomPhone()
+		}
+		if schema["format"] == "uuid" {
+			return uuid.New().String()
+		}
+		if schema["enum"] != nil {
+			enumValues := schema["enum"].([]interface{})
+			return enumValues[rand.Intn(len(enumValues))]
+		}
 		return randomString()
 	case "integer":
 		return rand.Intn(100)
 	case "boolean":
 		return rand.Intn(2) == 1
 	case "object":
-		return generateRandomData(schema)
+		return generateRandomData(schema, gid)
 	case "array":
 		itemSchema := schema["items"].(map[string]interface{})
-		return []interface{}{generateRandomValue(itemSchema)}
+		return []interface{}{generateRandomValue(fieldName, itemSchema, gid)}
 	default:
 		return nil
 	}
+}
+
+func generateRandomGST() string {
+	stateCode := rand.Intn(36) + 1
+	if stateCode < 10 {
+		return fmt.Sprintf("0%dAAAAA%04dA1Z%d", stateCode, rand.Intn(10000), rand.Intn(9))
+	}
+	return fmt.Sprintf("%dAAAAA%04dA1Z%d", stateCode, rand.Intn(10000), rand.Intn(9))
+}
+
+func generateRandomPAN() string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const digitset = "0123456789"
+	return fmt.Sprintf("%s%s%s%s", string(charset[rand.Intn(len(charset))]),
+		string(charset[rand.Intn(len(charset))]), string(charset[rand.Intn(len(charset))]),
+		string(charset[rand.Intn(len(charset))]) + string(digitset[rand.Intn(len(digitset))]),
+	)
+}
+
+func generateRandomPhone() string {
+	return fmt.Sprintf("9%09d", rand.Intn(1000000000))
+}
+
+func getRandomOperatorType() string {
+	operators := []string{"AND", "OR","",uuid.New().String()}
+	return operators[rand.Intn(len(operators))]
+}
+
+func getRandomPolicyType() string {
+	policyTypes := []string{"identity", "", uuid.New().String()}
+	return policyTypes[rand.Intn(len(policyTypes))]
 }
 
 func randomString() string {
 	return uuid.New().String()
 }
 
-func triggerAPI(endpoint EndpointInfo) (int, int) {
-	url := "http://localhost:4000" + endpoint.Path
-	jsonData := generateRandomData(endpoint.RequestBody)
+func getRandomList() []string {
+	rand.Seed(time.Now().UnixNano())
+
+	// Predefined policy types
+	policyTypes := []string{"gst", "pan", "phone", "email", "aadhaar", "employee_code", "gst_location"}
+
+	// Generate a random UUID string
+	randomUUID := uuid.New().String()
+
+	// Randomly decide which list to return
+	switch rand.Intn(3) {
+	case 0:
+		return policyTypes
+	case 1:
+		return []string{randomUUID}
+	default:
+		return []string{} // Empty list
+	}
+}
+
+func triggerAPI(endpoint EndpointInfo, gid string) (map[string]interface{}, int) {
+	url := "http://localhost:9034" + endpoint.Path
+	jsonData := generateRandomData(endpoint.RequestBody, gid)
 	requestBody, err := json.Marshal(jsonData)
 	if err != nil {
 		fmt.Println("Error marshalling request body:", err)
-		return 0, 0
+		return nil, 0
 	}
+
+	fmt.Printf("Request Body for %s %s:\n%s\n", endpoint.Method, endpoint.Path, requestBody)
 
 	req, err := http.NewRequest(strings.ToUpper(endpoint.Method), url, bytes.NewBuffer(requestBody))
 	if err != nil {
-		fmt.Println("Error creating request:", err)
-		return 0, 0
+		fmt.Println("Error creating HTTP request:", err)
+		return nil, 0
 	}
 
+	req.Header.Set("Authorization",  authToken)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+authToken)
-	req.Header.Set("User-Agent", "Go-Client")
 
 	client := &http.Client{}
+	startTime := time.Now()
 	resp, err := client.Do(req)
+	duration := time.Since(startTime)
+
 	if err != nil {
-		fmt.Println("Error triggering API:", err)
-		return 0, 0
+		fmt.Println("Error sending HTTP request:", err)
+		return nil, 0
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println("Error reading response body:", err)
-		return 0, 0
+		return nil, resp.StatusCode
 	}
 
 	fmt.Printf("Response for %s %s:\n%s\n", endpoint.Method, endpoint.Path, body)
-	fmt.Printf("Status Code: %d\n", resp.StatusCode)
+	fmt.Printf("%s %s Status Code: %d\n", endpoint.Method, endpoint.Path, resp.StatusCode)
+	fmt.Printf("%s %s Duration: %v\n", endpoint.Method, endpoint.Path, duration)
 
-	var responseMap map[string]interface{}
-	json.Unmarshal(body, &responseMap)
-	if id, ok := responseMap["id"].(float64); ok {
-		return int(id), resp.StatusCode
+	if strings.ToUpper(endpoint.Method) == "POST" && strings.Contains(endpoint.Path, "create-identity") {
+		var responseBody map[string]interface{}
+		if err := json.Unmarshal(body, &responseBody); err != nil {
+			fmt.Println("Error unmarshalling response body:", err)
+			return nil, resp.StatusCode
+		}
+		if data, ok := responseBody["data"].(map[string]interface{}); ok {
+			if extractedGid, ok := data["gid"].(string); ok {
+				fmt.Printf("Extracted gid from first POST: %s\n", extractedGid)
+				return responseBody, resp.StatusCode
+			}
+		}
 	}
 
-	return 0, resp.StatusCode
+	return nil, resp.StatusCode
 }
 
-func printCoverage(authToken string) {
-	coverageURL := "http://localhost:4000/coverage"
 
-	req, err := http.NewRequest("GET", coverageURL, nil)
+func triggerCoverage() {
+	url := "http://localhost:9034/coverage"
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		fmt.Println("Error creating coverage request:", err)
+		fmt.Println("Error creating HTTP request for /coverage:", err)
 		return
 	}
 
-	req.Header.Set("Authorization", "Bearer "+authToken)
+	req.Header.Set("Authorization", authToken)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("Error getting coverage:", err)
+		fmt.Println("Error sending HTTP request for /coverage:", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	coverageBody, err := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Println("Error reading coverage response body:", err)
+		fmt.Println("Error reading response body for /coverage:", err)
 		return
 	}
 
-	fmt.Println("Coverage Response:")
-	fmt.Println(string(coverageBody))
+	fmt.Printf("Response for GET /coverage:\n%s\n", body)
 }
 
 func main() {
@@ -241,63 +339,30 @@ func main() {
 		return
 	}
 
-	endpointInfos, err := ParseAPIDefinition(yamlData)
+	endpoints, err := ParseAPIDefinition(yamlData)
 	if err != nil {
 		fmt.Println("Error parsing API definition:", err)
 		return
 	}
 
-	var postEndpoint, putEndpoint, getEndpoint, deleteEndpoint EndpointInfo
-	for _, info := range endpointInfos {
-		if strings.ToUpper(info.Method) == "POST" {
-			postEndpoint = info
-		} else if strings.ToUpper(info.Method) == "PUT" {
-			putEndpoint = info
-		} else if strings.ToUpper(info.Method) == "GET" {
-			getEndpoint = info
-		} else if strings.ToUpper(info.Method) == "DELETE" {
-			deleteEndpoint = info
-		}
-	}
-
-	printCoverage(authToken)
+	var firstPostGid string
 
 	for {
-		// Trigger POST to create resource and get the ID
-		postID, statusCode := triggerAPI(postEndpoint)
-		fmt.Printf("POST Status Code: %d\n", statusCode)
-		printCoverage(authToken)
-		if postID == 0 {
-			fmt.Println("Failed to create resource, ID not found in response.")
-			return
+		for _, endpoint := range endpoints {
+			triggerCoverage()
+			responseBody, statusCode := triggerAPI(endpoint, firstPostGid)
+			triggerCoverage()
+
+			if statusCode == http.StatusOK && firstPostGid == "" && strings.ToUpper(endpoint.Method) == "POST" && strings.Contains(endpoint.Path, "create-identity") {
+				if data, ok := responseBody["data"].(map[string]interface{}); ok {
+					if gid, ok := data["gid"].(string); ok {
+						firstPostGid = gid
+					}
+				}
+			}
+
+			// Delay before the next request
+			time.Sleep(1 * time.Second)
 		}
-
-		// Update the endpoint paths with the new ID
-		putPath := strings.ReplaceAll(putEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
-		getPath := strings.ReplaceAll(getEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
-		deletePath := strings.ReplaceAll(deleteEndpoint.Path, "{id}", fmt.Sprintf("%d", postID))
-
-		// Trigger PUT to update resource
-		_, statusCode = triggerAPI(EndpointInfo{Path: putPath, Method: putEndpoint.Method, RequestBody: putEndpoint.RequestBody, ResponseBody: putEndpoint.ResponseBody})
-		fmt.Printf("PUT Status Code: %d\n", statusCode)
-		printCoverage(authToken)
-
-		// Trigger GET to retrieve resource
-		_, statusCode = triggerAPI(EndpointInfo{Path: getPath, Method: getEndpoint.Method, RequestBody: getEndpoint.RequestBody, ResponseBody: getEndpoint.ResponseBody})
-		fmt.Printf("GET Status Code: %d\n", statusCode)
-		printCoverage(authToken)
-
-		// Trigger DELETE to remove resource
-		_, statusCode = triggerAPI(EndpointInfo{Path: deletePath, Method: deleteEndpoint.Method, RequestBody: deleteEndpoint.RequestBody, ResponseBody: deleteEndpoint.ResponseBody})
-		fmt.Printf("DELETE Status Code: %d\n", statusCode)
-		printCoverage(authToken)
-
-		// Wait for a specific interval before the next iteration
-		time.Sleep(1 * time.Second) // Adjust the interval as needed
 	}
-}
-
-func printSchema(schema map[string]interface{}) {
-	schemaJSON, _ := json.MarshalIndent(schema, "", "  ")
-	fmt.Println(string(schemaJSON))
 }
